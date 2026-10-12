@@ -18,24 +18,25 @@ jobs:
         with:
           node-version: 20
 
-      - name: Configurar Java 21
+      - name: Configurar Java 17 (Compatible con Android)
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '21'
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Aceptar licencias de Android SDK
+        run: |
+          yes | sdkmanager --licenses || true
 
       - name: Instalar dependencias de Capacitor
         run: |
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
-      - name: Crear proyecto Android
+      - name: Crear y sincronizar proyecto Android
         run: |
           npx cap init "Calcar AR" "com.peperey.calcar" --web-dir www
           npx cap add android
-
-      - name: Configurar permisos de camara
-        run: |
           python3 configurar_permisos.py
           npx cap sync android
 
@@ -43,7 +44,7 @@ jobs:
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Subir APK generado
         uses: actions/upload-artifact@v4
