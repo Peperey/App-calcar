@@ -1,0 +1,47 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar codigo
+        uses: actions/checkout@v3
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Configurar Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Instalar Capacitor y preparar proyecto Android
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "Calcar AR" "com.peperey.calcar" --web-dir .
+          npx cap add android
+          
+          # Habilitar permisos de cámara en AndroidManifest.xml
+          sed -i '/<\/manifest>/i <uses-permission android:name="android.permission.CAMERA" />\n<uses-feature android:name="android.hardware.camera" />' android/app/src/main/AndroidManifest.xml
+
+      - name: Sincronizar y compilar APK
+        run: |
+          npx cap sync
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+
+      - name: Subir APK generado
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calcar-AR-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
