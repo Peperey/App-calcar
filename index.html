@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AR Calcar</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+  body { background: #000; color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; }
+  #container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+  video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+  #overlay {
+    position: absolute; z-index: 2; pointer-events: none;
+    max-width: 85%; max-height: 85%; object-fit: contain;
+    opacity: 0.5; filter: contrast(200%) grayscale(100%);
+    transform-origin: center center;
+  }
+  .controls {
+    position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%);
+    z-index: 10; display: flex; flex-direction: column; gap: 8px;
+    background: rgba(0,0,0,0.7); padding: 12px 16px; border-radius: 12px;
+    width: 90%; max-width: 360px;
+  }
+  .row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+  input[type=range] { width: 65%; accent-color: #00ff88; }
+  .btn-file {
+    background: #00ff88; color: #000; font-weight: bold; text-align: center;
+    padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+<div id="container">
+  <video id="cam" autoplay playsinline muted></video>
+  <img id="overlay" alt="Plantilla" />
+</div>
+<div class="controls">
+  <label class="btn-file">
+    📁 Cargar Imagen
+    <input type="file" id="fileInput" accept="image/*">
+  </label>
+  <div class="row">
+    <span>Opacidad:</span>
+    <input type="range" id="opacity" min="0.05" max="1" step="0.05" value="0.5">
+  </div>
+  <div class="row">
+    <span>Escala:</span>
+    <input type="range" id="scale" min="0.3" max="2" step="0.05" value="1">
+  </div>
+  <div class="row">
+    <span>Contornos:</span>
+    <input type="checkbox" id="edges" checked>
+  </div>
+</div>
+<script>
+  const video = document.getElementById('cam');
+  const overlay = document.getElementById('overlay');
+  const fileInput = document.getElementById('fileInput');
+  const opacitySlider = document.getElementById('opacity');
+  const scaleSlider = document.getElementById('scale');
+  const edgesCheck = document.getElementById('edges');
+
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' } },
+    audio: false
+  }).then(s => video.srcObject = s).catch(err => alert('Error cámara: ' + err));
+
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) overlay.src = URL.createObjectURL(e.target.files[0]);
+  });
+  opacitySlider.addEventListener('input', e => overlay.style.opacity = e.target.value);
+  scaleSlider.addEventListener('input', e => overlay.style.transform = 'scale(' + e.target.value + ')');
+  edgesCheck.addEventListener('change', () => {
+    overlay.style.filter = edgesCheck.checked ? 'grayscale(100%) contrast(300%) invert(100%) drop-shadow(0 0 1px #fff)' : 'none';
+  });
+</script>
+</body>
+</html>
