@@ -3,76 +3,183 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>AR Calcar</title>
+<title>AR Calcar Pro</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
-  body { background: #000; color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; }
-  #container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-  video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-  #overlay {
-    position: absolute; z-index: 2; pointer-events: none;
-    max-width: 85%; max-height: 85%; object-fit: contain;
-    opacity: 0.5; filter: contrast(200%) grayscale(100%);
-    transform-origin: center center;
+  body { background: #000; color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; user-select: none; }
+  #container { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; pointer-events: none; }
+  
+  #overlay-container {
+    position: absolute; z-index: 2; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; justify-content: center; align-items: center;
+    pointer-events: auto;
   }
+  #overlay {
+    max-width: 90%; max-height: 90%; object-fit: contain;
+    opacity: 0.5; filter: grayscale(100%) contrast(300%) invert(100%);
+    transform-origin: center center;
+    transition: transform 0.05s ease-out;
+  }
+
+  /* Botón de bloqueo flotante */
+  #btnLock {
+    position: absolute; top: 20px; right: 20px; z-index: 20;
+    background: rgba(0,0,0,0.7); border: 2px solid #00ff88; color: #fff;
+    width: 48px; height: 48px; border-radius: 50%; font-size: 20px;
+    display: flex; justify-content: center; align-items: center; cursor: pointer;
+  }
+
+  /* Panel de controles */
   .controls {
     position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%);
     z-index: 10; display: flex; flex-direction: column; gap: 8px;
-    background: rgba(0,0,0,0.7); padding: 12px 16px; border-radius: 12px;
-    width: 90%; max-width: 360px;
+    background: rgba(0,0,0,0.85); padding: 12px 16px; border-radius: 14px;
+    width: 92%; max-width: 380px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    transition: opacity 0.2s, transform 0.2s;
   }
+  .controls.hidden { opacity: 0; pointer-events: none; transform: translate(-50%, 20px); }
+
   .row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
-  input[type=range] { width: 65%; accent-color: #00ff88; }
-  .btn-file {
-    background: #00ff88; color: #000; font-weight: bold; text-align: center;
-    padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  button, .btn-action {
+    background: #222; border: 1px solid #444; color: #fff; border-radius: 6px;
+    padding: 7px; font-size: 12px; cursor: pointer; text-align: center;
   }
+  button:active, .btn-action:active { background: #333; }
+  .btn-file { background: #00ff88; color: #000; font-weight: bold; border: none; }
+  input[type=range] { width: 62%; accent-color: #00ff88; }
   input[type=file] { display: none; }
 </style>
 </head>
 <body>
+
 <div id="container">
   <video id="cam" autoplay playsinline muted></video>
-  <img id="overlay" alt="Plantilla" />
+  <div id="overlay-container">
+    <img id="overlay" alt="" />
+  </div>
 </div>
-<div class="controls">
-  <label class="btn-file">
+
+<div id="btnLock">🔓</div>
+
+<div class="controls" id="controlsPanel">
+  <label class="btn-action btn-file">
     📁 Cargar Imagen
     <input type="file" id="fileInput" accept="image/*">
   </label>
+
+  <div class="btn-grid">
+    <button id="btnTorch">🔦 Flash: OFF</button>
+    <button id="btnFlip">🪞 Espejo</button>
+    <button id="btnRotate">🔄 Rotar</button>
+  </div>
+
   <div class="row">
     <span>Opacidad:</span>
     <input type="range" id="opacity" min="0.05" max="1" step="0.05" value="0.5">
   </div>
   <div class="row">
     <span>Escala:</span>
-    <input type="range" id="scale" min="0.3" max="2" step="0.05" value="1">
+    <input type="range" id="scale" min="0.2" max="3" step="0.05" value="1">
   </div>
   <div class="row">
-    <span>Contornos:</span>
+    <span>Modo Contorno:</span>
     <input type="checkbox" id="edges" checked>
   </div>
 </div>
+
 <script>
   const video = document.getElementById('cam');
   const overlay = document.getElementById('overlay');
+  const container = document.getElementById('overlay-container');
+  const controls = document.getElementById('controlsPanel');
+  const btnLock = document.getElementById('btnLock');
   const fileInput = document.getElementById('fileInput');
   const opacitySlider = document.getElementById('opacity');
   const scaleSlider = document.getElementById('scale');
   const edgesCheck = document.getElementById('edges');
+  const btnTorch = document.getElementById('btnTorch');
+  const btnFlip = document.getElementById('btnFlip');
+  const btnRotate = document.getElementById('btnRotate');
 
+  let videoTrack = null;
+  let torchState = false;
+  let isFlipped = false;
+  let rotation = 0;
+  let posX = 0, posY = 0, startX = 0, startY = 0, isDragging = false;
+  let isLocked = false;
+
+  // Cámara nativa con control de flash
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: 'environment' } },
+    video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } },
     audio: false
-  }).then(s => video.srcObject = s).catch(err => alert('Error cámara: ' + err));
+  }).then(stream => {
+    video.srcObject = stream;
+    videoTrack = stream.getVideoTracks()[0];
+  }).catch(e => console.warn(e));
 
-  fileInput.addEventListener('change', e => {
-    if (e.target.files[0]) overlay.src = URL.createObjectURL(e.target.files[0]);
+  // 1. Linterna / Flash
+  btnTorch.addEventListener('click', async () => {
+    if (!videoTrack) return;
+    try {
+      torchState = !torchState;
+      await videoTrack.applyConstraints({ advanced: [{ torch: torchState }] });
+      btnTorch.textContent = torchState ? "🔦 Flash: ON" : "🔦 Flash: OFF";
+      btnTorch.style.borderColor = torchState ? "#00ff88" : "#444";
+    } catch(err) {
+      alert("Tu dispositivo no permite activar la linterna desde la app.");
+    }
   });
-  opacitySlider.addEventListener('input', e => overlay.style.opacity = e.target.value);
-  scaleSlider.addEventListener('input', e => overlay.style.transform = 'scale(' + e.target.value + ')');
+
+  // 2. Transformaciones (Escala, Rotación, Espejo y Posición)
+  function updateTransform() {
+    const scale = scaleSlider.value;
+    const flipX = isFlipped ? -1 : 1;
+    overlay.style.transform = `translate(${posX}px, ${posY}px) rotate(${rotation}deg) scale(${scale * flipX}, ${scale})`;
+  }
+
+  btnFlip.addEventListener('click', () => { isFlipped = !isFlipped; updateTransform(); });
+  btnRotate.addEventListener('click', () => { rotation = (rotation + 90) % 360; updateTransform(); });
+  scaleSlider.addEventListener('input', updateTransform);
+
+  // 3. Arrastrar imagen por la pantalla
+  container.addEventListener('touchstart', e => {
+    if (isLocked || e.touches.length > 1) return;
+    isDragging = true;
+    startX = e.touches[0].clientX - posX;
+    startY = e.touches[0].clientY - posY;
+  });
+
+  window.addEventListener('touchmove', e => {
+    if (!isDragging || isLocked) return;
+    posX = e.touches[0].clientX - startX;
+    posY = e.touches[0].clientY - startY;
+    updateTransform();
+  });
+
+  window.addEventListener('touchend', () => { isDragging = false; });
+
+  // 4. Bloqueo de pantalla (Candado)
+  btnLock.addEventListener('click', () => {
+    isLocked = !isLocked;
+    btnLock.textContent = isLocked ? "🔒" : "🔓";
+    controls.classList.toggle('hidden', isLocked);
+    container.style.pointerEvents = isLocked ? "none" : "auto";
+  });
+
+  // Imagen y filtros
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) {
+      overlay.src = URL.createObjectURL(e.target.files[0]);
+      posX = 0; posY = 0; rotation = 0; isFlipped = false; scaleSlider.value = 1;
+      updateTransform();
+    }
+  });
+
+  opacitySlider.addEventListener('input', e => { overlay.style.opacity = e.target.value; });
   edgesCheck.addEventListener('change', () => {
-    overlay.style.filter = edgesCheck.checked ? 'grayscale(100%) contrast(300%) invert(100%) drop-shadow(0 0 1px #fff)' : 'none';
+    overlay.style.filter = edgesCheck.checked ? "grayscale(100%) contrast(300%) invert(100%) drop-shadow(0 0 1px #fff)" : "none";
   });
 </script>
 </body>
