@@ -17,28 +17,40 @@ jobs:
         with:
           node-version: 20
 
-      - name: Configurar Java
+      - name: Configurar Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
-      - name: Instalar Capacitor y generar proyecto Android
+      - name: Preparar proyecto Capacitor
         run: |
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
           npx cap init "Calcar AR" "com.peperey.calcar" --web-dir www
           npx cap add android
-          
-          # Habilitar permisos de cámara en AndroidManifest.xml
-          sed -i '/<\/manifest>/i <uses-permission android:name="android.permission.CAMERA" />\n<uses-feature android:name="android.hardware.camera" />' android/app/src/main/AndroidManifest.xml
 
-      - name: Sincronizar y compilar APK
-        run: |
+          # Inyectar permisos de camara
+          python3 -c "
+path = 'android/app/src/main/AndroidManifest.xml'
+with open(path, 'r') as f:
+    c = f.read()
+perms = '''
+    <uses-permission android:name=\"android.permission.CAMERA\" />
+    <uses-feature android:name=\"android.hardware.camera\" />
+'''
+c = c.replace('</manifest>', perms + '\n</manifest>')
+with open(path, 'w') as f:
+    f.write(c)
+"
           npx cap sync android
+
+      - name: Aceptar licencias y Compilar APK
+        run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          # Compilar generando reporte de errores si algo falla
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Subir APK generado
         uses: actions/upload-artifact@v4
